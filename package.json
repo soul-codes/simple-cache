@@ -1,0 +1,17 @@
+{
+  "name": "@typescript-first/simple-cache",
+  "version": "0.0.0",
+  "main": "dist",
+  "license": "MIT",
+  "description": "Simple cache function wrapper",
+  "author": "Soul Codes",
+  "scripts": {
+    "watch": "yarn prepare --watch",
+    "prepare": "tsc --project src",
+    "release": "release-it"
+  },
+  "devDependencies": {
+    "release-it": "^10.0.4",
+    "typescript": "^3.2.4"
+  }
+}
