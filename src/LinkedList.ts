@@ -10,10 +10,11 @@ export class LinkedList<Item extends object> {
 
   insertAtHead(item: Item) {
     let linkedListItem = this._lookup.get(item);
+    const head = this._head;
     if (linkedListItem) {
       this._remove(linkedListItem);
+      linkedListItem.further = head;
     } else {
-      const head = this._head;
       linkedListItem = {
         parent: this,
         further: head,
