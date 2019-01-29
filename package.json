@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "main": "dist",
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "description": "Simple cache function wrapper",
   "author": "Soul Codes",
   "scripts": {
