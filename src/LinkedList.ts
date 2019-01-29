@@ -44,6 +44,7 @@ export class LinkedList<Item extends object> {
     } else {
       this._tail = closer;
     }
+    linkedListItem.closer = linkedListItem.further = null;
     this._length--;
   }
 
