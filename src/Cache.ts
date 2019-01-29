@@ -7,9 +7,10 @@ interface EntryState {
   paramState: ParamState;
   cache: Promise<any>;
   isBeingUsed: boolean;
+  isResolved: boolean;
 }
 
-export interface CacheSettings<Param> {
+export interface CacheSettings<Param, Result> {
   /**
    * Called one per cached function call. It should a digest of the param that
    * uniquely identifies a cache entry. If the param produces the same hash as
@@ -30,6 +31,12 @@ export interface CacheSettings<Param> {
    * param hash) that should be retained.
    */
   maxEntries: number;
+
+  /**
+   * Returns true if the result should be cached. By default every result
+   * is cached.
+   */
+  shouldCache?: (result: Result, param: Param) => boolean;
 }
 
 /**
@@ -41,12 +48,45 @@ export interface CacheSettings<Param> {
  */
 export function withCache<Param, Return>(
   fn: (param: Param) => Promise<Return>,
-  cacheSettings: CacheSettings<Param>
+  cacheSettings: CacheSettings<Param, Return>
 ): ((param: Param) => Promise<Return>) & {
   _entriesByAccess: LinkedList<EntryState>;
 } {
   const entriesByHash = new Map<String, EntryState>();
   const entriesByAccess = new LinkedList<EntryState>();
+
+  function invoke(entryState: EntryState, param: Param, paramHash: string) {
+    entryState.isBeingUsed = true;
+    entryState.isResolved = false;
+    try {
+      const promise = (entryState.cache = fn(param)
+        .then(result => {
+          if (entryState.cache === promise) {
+            entryState.isResolved = true;
+            const { shouldCache } = cacheSettings;
+            if (shouldCache && !shouldCache(result, param)) {
+              detach(entryState);
+            }
+            return result;
+          }
+        })
+        .catch(error => {
+          if (entryState.cache === promise) {
+            detach(entryState);
+          }
+          throw error;
+        }));
+      entryState.isBeingUsed = false;
+    } catch (error) {
+      detach(entryState);
+      throw error;
+    }
+  }
+
+  function detach(entryState: EntryState) {
+    entriesByAccess.remove(entryState);
+    entriesByHash.delete(entryState.paramHash);
+  }
 
   return Object.assign(
     (param: Param): Promise<Return> => {
@@ -64,17 +104,13 @@ export function withCache<Param, Return>(
           );
         }
 
-        if (!compareCallState(callState, entryState.paramState)) {
-          entryState.isBeingUsed = true;
-          try {
-            entryState.cache = fn(param);
-          } catch (error) {
-            entriesByAccess.remove(entryState);
-            entriesByHash.delete(paramHash);
-            throw error;
-          }
+        const isCacheUseable =
+          compareCallState(callState, entryState.paramState) &&
+          entryState.isResolved;
+
+        if (!isCacheUseable) {
           entryState.paramState = callState;
-          entryState.isBeingUsed = false;
+          invoke(entryState, param, paramHash);
         }
         entriesByAccess.insertAtHead(entryState);
         return entryState.cache;
@@ -83,20 +119,12 @@ export function withCache<Param, Return>(
           paramState: callState,
           paramHash: paramHash,
           isBeingUsed: true,
+          isResolved: false,
           cache: null as any
         };
         entriesByAccess.insertAtHead(entryState);
         entriesByHash.set(paramHash, entryState);
-
-        try {
-          entryState.cache = fn(param);
-        } catch (error) {
-          entriesByAccess.remove(entryState);
-          entriesByHash.delete(paramHash);
-          throw error;
-        }
-
-        entryState.isBeingUsed = false;
+        invoke(entryState, param, paramHash);
         if (entriesByAccess.length > cacheSettings.maxEntries) {
           const tail = entriesByAccess.tail;
           if (tail) {
