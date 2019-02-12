@@ -67,8 +67,8 @@ export function withCache<Param, Return>(
             if (shouldCache && !shouldCache(result, param)) {
               detach(entryState);
             }
-            return result;
           }
+          return result;
         })
         .catch(error => {
           if (entryState.cache === promise) {
